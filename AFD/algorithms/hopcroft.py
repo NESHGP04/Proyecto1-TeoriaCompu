@@ -3,6 +3,10 @@ Algoritmo de Hopcroft para minimizar un AFD
 '''
 
 from collections import defaultdict, deque
+from typing import List, Optional, Set
+from .subset_construction import afn_a_afd, mostrar_tabla_transiciones, optimizar_nombres_estados
+from .thompson import regexp_a_afn
+from models.automata import AFD
 
 class Particion:
     """Representa una partición de estados para el algoritmo de Hopcroft"""

@@ -1,8 +1,8 @@
 # AFD/simulation.py
 from models.automata import AFD
-from thompson import regexp_a_afn
-from subset_construction import afn_a_afd, optimizar_nombres_estados, mostrar_tabla_transiciones
-from hopcroft import minimizar_afd_hopcroft
+from .thompson import regexp_a_afn
+from .subset_construction import afn_a_afd, optimizar_nombres_estados, mostrar_tabla_transiciones
+from .hopcroft import minimizar_afd_hopcroft
 
 from typing import Set, Dict, List, Tuple
 from itertools import product

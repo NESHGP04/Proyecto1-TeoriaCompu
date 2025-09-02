@@ -1,2 +1,4 @@
 .cpython-313.pyc
 __pycache__/
+*.json
+*.png

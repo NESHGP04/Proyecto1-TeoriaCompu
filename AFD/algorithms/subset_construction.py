@@ -1,4 +1,7 @@
 from collections import defaultdict, deque
+from typing import Set
+from AFD.algorithms.thompson import regexp_a_afn
+from models.automata import AFD, AFN, EPSILON
 
 def epsilon_clausura(afn: AFN, estados: Set[int]) -> Set[int]:
     """

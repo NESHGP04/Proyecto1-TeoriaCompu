@@ -2,7 +2,7 @@
 Algoritmo de Thompson para construir un AFN a partir de una expresión regular
 '''
 from models.automata import AFN, EPSILON
-from algorithms.shunting_yard import shunting_yard
+from .shunting_yard import shunting_yard
 
 class FragmentoAFN:
     """
