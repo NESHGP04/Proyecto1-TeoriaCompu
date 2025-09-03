@@ -38,6 +38,93 @@ def mover(afn: AFN, estados: Set[int], simbolo: str) -> Set[int]:
     
     return resultado
 
+def completar_afd(afd: AFD) -> AFD:
+    """
+    Completa un AFD agregando un estado de error y todas las transiciones faltantes
+    """
+    
+    # Verificar si ya está completo
+    transiciones_existentes = {}
+    for t in afd.transiciones:
+        if t.origen not in transiciones_existentes:
+            transiciones_existentes[t.origen] = set()
+        transiciones_existentes[t.origen].add(t.simbolo)
+    
+    # Verificar si necesitamos estado de error
+    necesita_completar = False
+    estados_faltantes = []
+    
+    for estado in afd.estados.keys():
+        for simbolo in afd.alfabeto:
+            if (estado not in transiciones_existentes or 
+                simbolo not in transiciones_existentes[estado]):
+                necesita_completar = True
+                estados_faltantes.append((estado, simbolo))
+    
+    if not necesita_completar:
+        print("   ✅ AFD ya está completo")
+        return afd
+    
+    print(f"   ⚠️  Faltan {len(estados_faltantes)} transiciones")
+    
+    # Crear estado de error
+    estado_error = afd.agregar_estado(es_aceptacion=False)
+    print(f"   📍 Estado de error creado: q{estado_error}")
+    
+    # Agregar transiciones faltantes al estado de error
+    for estado, simbolo in estados_faltantes:
+        afd.agregar_transicion(estado, simbolo, estado_error)
+        print(f"     q{estado} --{simbolo}--> q{estado_error}")
+    
+    # El estado de error debe tener transiciones a sí mismo para todos los símbolos
+    for simbolo in afd.alfabeto:
+        afd.agregar_transicion(estado_error, simbolo, estado_error)
+        print(f"     q{estado_error} --{simbolo}--> q{estado_error} (bucle)")
+    
+    print(f"   ✅ AFD completado con {len(afd.estados)} estados")
+    return afd
+
+def mostrar_tabla_transiciones_completa(afd: AFD):
+    """Muestra la tabla de transiciones completa del AFD"""
+    print("\n=== Tabla de Transiciones AFD Completa ===")
+    
+    # Crear tabla de transiciones
+    tabla = defaultdict(dict)
+    for transicion in afd.transiciones:
+        tabla[transicion.origen][transicion.simbolo] = transicion.destino
+    
+    # Encabezado
+    simbolos_ordenados = sorted(afd.alfabeto)
+    encabezado = f"{'Estado':<8} |"
+    for simbolo in simbolos_ordenados:
+        encabezado += f" {simbolo:<8} |"
+    print(encabezado)
+    print("-" * len(encabezado))
+    
+    # Filas de estados
+    for estado in sorted(afd.estados.keys()):
+        # Marcadores para estado inicial y de aceptación
+        marcador = ""
+        if estado == afd.estado_inicial:
+            marcador += "→"
+        if estado in afd.estados_aceptacion:
+            marcador += "*"
+        
+        fila = f"{marcador}q{estado:<6} |"
+        
+        for simbolo in simbolos_ordenados:
+            destino = tabla[estado].get(simbolo, "ERROR")
+            if destino != "ERROR":
+                destino = f"q{destino}"
+            fila += f" {destino:<8} |"
+        
+        print(fila)
+    
+    print(f"\nLeyenda:")
+    print(f"→ = Estado inicial")
+    print(f"* = Estado de aceptación")
+    print(f"ERROR = Transición faltante (no debería ocurrir en AFD completo)")
+
 def afn_a_afd(afn: AFN) -> AFD:
     """
     Convierte un AFN a AFD usando el algoritmo de Construcción de Subconjuntos
@@ -104,6 +191,34 @@ def afn_a_afd(afn: AFN) -> AFD:
     
     return afd
 
+def afn_a_afd_completo(afn: AFN, completar: bool = True) -> AFD:
+    """
+    Convierte un AFN a AFD usando construcción de subconjuntos y opcionalmente lo completa
+    """
+    print("🔄 Iniciando conversión AFN → AFD...")
+    
+    # Conversión normal AFN → AFD
+    afd = afn_a_afd(afn)
+    afd = optimizar_nombres_estados(afd)
+    
+    print(f"✅ AFD básico creado:")
+    print(f"   - Estados: {len(afd.estados)}")
+    print(f"   - Transiciones: {len(afd.transiciones)}")
+    print(f"   - Alfabeto: {sorted(afd.alfabeto)}")
+    
+    # Mostrar tabla antes de completar
+    print(f"\n📊 AFD antes de completar:")
+    mostrar_tabla_transiciones(afd)
+    
+    if completar:
+        # Completar AFD
+        afd = completar_afd(afd)
+        
+        print(f"\n📊 AFD después de completar:")
+        mostrar_tabla_transiciones_completa(afd)
+    
+    return afd
+
 def optimizar_nombres_estados(afd: AFD) -> AFD:
     """
     Renombra los estados del AFD para que sean consecutivos desde 0
@@ -156,6 +271,50 @@ def mostrar_tabla_transiciones(afd: AFD):
                 destino = f"q{destino}"
             fila += f"{destino:<8} | "
         print(fila)
+
+def probar_afd_completo():
+    """Prueba la construcción de AFD completo"""
+    casos_prueba = [
+        "a|b",
+        "a*",
+        "(a|b)*a",
+        "ab"
+    ]
+    
+    for caso in casos_prueba:
+        print(f"\n{'='*70}")
+        print(f"CASO: {caso}")
+        print(f"{'='*70}")
+        
+        # Crear AFN
+        from .thompson import regexp_a_afn
+        afn = regexp_a_afn(caso)
+        
+        # Convertir a AFD completo
+        afd_completo = afn_a_afd_completo(afn, completar=True)
+        
+        # Exportar
+        nombre = caso.replace('|', '_or_').replace('*', '_star').replace('(', '').replace(')', '')
+        afd_completo.exportar_json(f"afd_completo_{nombre}.json")
+        afd_completo.visualizar(f"afd_completo_{nombre}")
+        
+        print(f"\n✅ AFD completo generado:")
+        print(f"   - Archivo: afd_completo_{nombre}.json/png")
+        
+        # Probar algunas cadenas para verificar
+        cadenas_test = ["", "a", "b", "aa", "ab", "ba", "bb"]
+        print(f"\n🧪 Probando cadenas:")
+        for cadena in cadenas_test[:5]:  # Solo primeras 5
+            try:
+                es_aceptada, secuencia = afd_completo.simular(cadena)
+                resultado = "✅" if es_aceptada else "❌"
+                print(f"   '{cadena}' → {resultado} (estados: {' → '.join(f'q{e}' for e in secuencia)})")
+            except Exception as e:
+                print(f"   '{cadena}' → ERROR: {e}")
+
+
+if __name__ == "__main__":
+    probar_afd_completo()
 
 def probar_construccion_subconjuntos():
     """Prueba la construcción de subconjuntos"""
