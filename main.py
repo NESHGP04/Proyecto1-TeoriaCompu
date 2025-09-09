@@ -1,6 +1,6 @@
 """
 Proyecto 1 - Teoría de la Computación
-Constructor de Autómatas Finitos
+Constructor de Autómatas Finitos - Versión Simplificada
 Autor: Camila Richter 23183, Marinés García 23391 y Carlos Alburez 231311
 Fecha: Septiembre 2025
 """
@@ -8,14 +8,13 @@ Fecha: Septiembre 2025
 from models.automata import AFD
 from AFD.algorithms.shunting_yard import shunting_yard
 from AFD.algorithms.thompson import construir_afn_thompson
-from AFD.algorithms.subset_construction import afn_a_afd, mostrar_tabla_transiciones, optimizar_nombres_estados
+from AFD.algorithms.subset_construction import afn_a_afd, afn_a_afd_completo, mostrar_tabla_transiciones, optimizar_nombres_estados, es_afd_completo
 from AFD.algorithms.hopcroft import minimizar_afd_hopcroft
-from AFD.algorithms.simulation import generar_cadenas_prueba, interfaz_simulacion_interactiva, probar_multiple_cadenas, simular_afd_detallado, mostrar_simulacion
+from AFD.algorithms.simulation import simular_afd_detallado, mostrar_simulacion
 
 import os
 import sys
 from typing import Optional
-import argparse
 
 def limpiar_pantalla():
     """Limpia la pantalla de la terminal"""
@@ -31,22 +30,6 @@ def mostrar_banner():
 ╚══════════════════════════════════════════════════════════════════════════════╝
     """)
 
-def mostrar_menu():
-    """Muestra el menú principal"""
-    print("""
-┌─────────────────────────── MENÚ PRINCIPAL ───────────────────────────────┐
-│                                                                           │
-│  1. Construir autómata desde expresión regular (AFD parcial)            │
-│  2. Construir autómata desde expresión regular (AFD completo)           │
-│  3. Simular cadenas en AFD                                              │
-│  4. Mostrar información de autómata                                      │
-│  5. Generar archivos de ejemplo                                         │
-│  6. Modo interactivo de simulación                                      │
-│  0. Salir                                                               │
-│                                                                           │
-└───────────────────────────────────────────────────────────────────────────┘
-    """)
-
 def validar_regexp(regexp: str) -> bool:
     """Valida si una expresión regular tiene la sintaxis correcta"""
     try:
@@ -56,7 +39,7 @@ def validar_regexp(regexp: str) -> bool:
         # Verificar caracteres válidos
         for char in regexp:
             if char not in permitidos:
-                print(f"❌ Error: Carácter no permitido '{char}'")
+                print(f"ERROR: Carácter no permitido '{char}'")
                 return False
         
         # Verificar paréntesis balanceados
@@ -67,130 +50,39 @@ def validar_regexp(regexp: str) -> bool:
             elif char == ')':
                 balance -= 1
                 if balance < 0:
-                    print("❌ Error: Paréntesis no balanceados")
+                    print("ERROR: Paréntesis no balanceados")
                     return False
         
         if balance != 0:
-            print("❌ Error: Paréntesis no balanceados")
+            print("ERROR: Paréntesis no balanceados")
             return False
         
         # Verificar que no esté vacía
         if not regexp.strip():
-            print("❌ Error: Expresión regular vacía")
+            print("ERROR: Expresión regular vacía")
             return False
         
         return True
         
     except Exception as e:
-        print(f"❌ Error validando expresión: {e}")
+        print(f"ERROR validando expresión: {e}")
         return False
 
-def completar_afd(afd: AFD) -> AFD:
-    """
-    Completa un AFD agregando un estado de error y todas las transiciones faltantes
-    """
-    from collections import defaultdict
-    
-    print("\n🔧 Completando AFD...")
-    
-    # Verificar si ya está completo
-    transiciones_existentes = {}
-    for t in afd.transiciones:
-        if t.origen not in transiciones_existentes:
-            transiciones_existentes[t.origen] = set()
-        transiciones_existentes[t.origen].add(t.simbolo)
-    
-    # Verificar si necesitamos estado de error
-    necesita_completar = False
-    estados_faltantes = []
-    
-    for estado in afd.estados.keys():
-        for simbolo in afd.alfabeto:
-            if (estado not in transiciones_existentes or 
-                simbolo not in transiciones_existentes[estado]):
-                necesita_completar = True
-                estados_faltantes.append((estado, simbolo))
-    
-    if not necesita_completar:
-        print("   ✅ AFD ya está completo")
-        return afd
-    
-    print(f"   ⚠️  Faltan {len(estados_faltantes)} transiciones")
-    
-    # Crear estado de error
-    estado_error = afd.agregar_estado(es_aceptacion=False)
-    print(f"   📍 Estado de error creado: q{estado_error}")
-    
-    # Agregar transiciones faltantes al estado de error
-    for estado, simbolo in estados_faltantes:
-        afd.agregar_transicion(estado, simbolo, estado_error)
-        print(f"     q{estado} --{simbolo}--> q{estado_error}")
-    
-    # El estado de error debe tener transiciones a sí mismo para todos los símbolos
-    for simbolo in afd.alfabeto:
-        afd.agregar_transicion(estado_error, simbolo, estado_error)
-        print(f"     q{estado_error} --{simbolo}--> q{estado_error} (bucle)")
-    
-    print(f"   ✅ AFD completado con {len(afd.estados)} estados")
-    return afd
-
-def mostrar_tabla_transiciones_completa(afd: AFD):
-    """Muestra la tabla de transiciones completa del AFD"""
-    from collections import defaultdict
-    
-    print("\n=== Tabla de Transiciones AFD Completa ===")
-    
-    # Crear tabla de transiciones
-    tabla = defaultdict(dict)
-    for transicion in afd.transiciones:
-        tabla[transicion.origen][transicion.simbolo] = transicion.destino
-    
-    # Encabezado
-    simbolos_ordenados = sorted(afd.alfabeto)
-    encabezado = f"{'Estado':<8} |"
-    for simbolo in simbolos_ordenados:
-        encabezado += f" {simbolo:<8} |"
-    print(encabezado)
-    print("-" * len(encabezado))
-    
-    # Filas de estados
-    for estado in sorted(afd.estados.keys()):
-        # Marcadores para estado inicial y de aceptación
-        marcador = ""
-        if estado == afd.estado_inicial:
-            marcador += "→"
-        if estado in afd.estados_aceptacion:
-            marcador += "*"
-        
-        fila = f"{marcador}q{estado:<6} |"
-        
-        for simbolo in simbolos_ordenados:
-            destino = tabla[estado].get(simbolo, "ERROR")
-            if destino != "ERROR":
-                destino = f"q{destino}"
-            fila += f" {destino:<8} |"
-        
-        print(fila)
-    
-    print(f"\nLeyenda:")
-    print(f"→ = Estado inicial")
-    print(f"* = Estado de aceptación")
-
-def construir_automata_completo(regexp: str, afd_completo: bool = False) -> Optional[AFD]:
+def construir_automata_completo(regexp: str) -> Optional[AFD]:
     """Construye el autómata completo paso a paso"""
     print(f"\n{'='*70}")
-    print(f"CONSTRUCCIÓN DE AUTÓMATA PARA: {regexp}")
+    print(f"PROCESANDO EXPRESIÓN REGULAR: {regexp}")
     print(f"{'='*70}")
     
     try:
         # Paso 1: Shunting Yard
-        print("\n📝 Paso 1: Convertir a notación postfix (Shunting Yard)")
+        print("\nPaso 1: Convertir a notación postfix (Shunting Yard)")
         postfix = shunting_yard(regexp)
         print(f"   Expresión infija:  {regexp}")
         print(f"   Expresión postfix: {postfix}")
         
         # Paso 2: Construir AFN (Thompson)
-        print("\n🔨 Paso 2: Construir AFN (Algoritmo de Thompson)")
+        print("\nPaso 2: Construir AFN (Algoritmo de Thompson)")
         afn = construir_afn_thompson(postfix)
         afn.establecer_inicial(0)
         
@@ -201,326 +93,260 @@ def construir_automata_completo(regexp: str, afd_completo: bool = False) -> Opti
         
         print(f"   AFN creado con {len(afn.estados)} estados")
         print(f"   Alfabeto: {sorted(afn.alfabeto)}")
+        print(f"   Estado inicial: {afn.estado_inicial}")
+        print(f"   Estados de aceptación: {sorted(afn.estados_aceptacion)}")
         
         # Exportar AFN
         nombre_base = regexp.replace('|', '_or_').replace('*', '_star').replace('+', '_plus').replace('(', '').replace(')', '')
         afn.exportar_json(f"afn_{nombre_base}.json")
         afn.visualizar(f"afn_{nombre_base}")
+        print(f"   Archivo AFN: afn_{nombre_base}.json")
+        print(f"   Gráfico AFN: afn_{nombre_base}.png")
         
-        # Paso 3: Convertir AFN a AFD
-        print("\n🔄 Paso 3: Convertir AFN a AFD (Construcción de Subconjuntos)")
-        afd = afn_a_afd(afn)
+        # Paso 3: Convertir AFN a AFD COMPLETO (CON ESTADOS TRAMPA)
+        print("\nPaso 3: Convertir AFN a AFD (Construcción de Subconjuntos)")
+        print("   Creando AFD completo con estados trampa...")
+        
+        # Usar afn_a_afd_completo con completar=True
+        afd = afn_a_afd_completo(afn, completar=True, mostrar_detalles=True)
         afd = optimizar_nombres_estados(afd)
         
-        print(f"   AFD básico creado con {len(afd.estados)} estados")
+        print(f"   AFD completo creado con {len(afd.estados)} estados")
+        print(f"   Alfabeto: {sorted(afd.alfabeto)}")
+        print(f"   Estado inicial: {afd.estado_inicial}")
+        print(f"   Estados de aceptación: {sorted(afd.estados_aceptacion)}")
         
-        # Completar AFD si se solicita
-        if afd_completo:
-            afd = completar_afd(afd)
+        # Verificar que esté completo
+        if es_afd_completo(afd):
+            print(f"   AFD está completo (tiene transiciones para todos los símbolos)")
+        else:
+            print(f"   WARNING: AFD no está completo")
         
-        sufijo = "completo_" if afd_completo else ""
-        afd.exportar_json(f"afd_{sufijo}{nombre_base}.json")
-        afd.visualizar(f"afd_{sufijo}{nombre_base}")
+        afd.exportar_json(f"afd_{nombre_base}.json")
+        afd.visualizar(f"afd_{nombre_base}")
+        print(f"   Archivo AFD: afd_{nombre_base}.json")
+        print(f"   Gráfico AFD: afd_{nombre_base}.png")
         
-        # Paso 4: Minimizar AFD (Hopcroft)
-        print("\n⚡ Paso 4: Minimizar AFD (Algoritmo de Hopcroft)")
+        # Paso 4: Minimizar AFD (SIN ESTADOS TRAMPA)
+        print("\nPaso 4: Minimizar AFD (Algoritmo de Hopcroft)")
+        print("   Eliminando estados trampa durante minimización...")
+        
         afd_min = minimizar_afd_hopcroft(afd)
         afd_min = optimizar_nombres_estados(afd_min)
         
         print(f"   AFD minimizado con {len(afd_min.estados)} estados")
+        print(f"   Estado inicial: {afd_min.estado_inicial}")
+        print(f"   Estados de aceptación: {sorted(afd_min.estados_aceptacion)}")
         
         reduccion = len(afd.estados) - len(afd_min.estados)
         if reduccion > 0:
-            print(f"   ✅ Reducción: {reduccion} estados eliminados")
+            print(f"   Reducción: {reduccion} estados eliminados")
+            print(f"      (Estados trampa y equivalentes removidos)")
         else:
-            print(f"   ℹ️  No se pudo reducir más")
+            print(f"   No se pudo reducir más")
+        
+        # Verificar que el minimal NO esté completo (no debe tener estados trampa)
+        if not es_afd_completo(afd_min):
+            print(f"   AFD minimal es incompleto (sin estados trampa) - CORRECTO")
+        else:
+            print(f"   WARNING: AFD minimal está completo (podría tener estados trampa)")
         
         # Exportar AFD minimizado
-        afd_min.exportar_json(f"afd_min_{sufijo}{nombre_base}.json")
-        afd_min.visualizar(f"afd_min_{sufijo}{nombre_base}")
+        afd_min.exportar_json(f"afd_min_{nombre_base}.json")
+        afd_min.visualizar(f"afd_min_{nombre_base}")
+        print(f"   Archivo AFD Minimal: afd_min_{nombre_base}.json")
+        print(f"   Gráfico AFD Minimal: afd_min_{nombre_base}.png")
         
         # Mostrar tabla de transiciones final
-        print(f"\n📊 Tabla de transiciones del AFD minimizado:")
-        if afd_completo:
-            mostrar_tabla_transiciones_completa(afd_min)
-        else:
-            mostrar_tabla_transiciones(afd_min)
+        print(f"\nTabla de transiciones del AFD minimizado:")
+        mostrar_tabla_transiciones(afd_min)
         
-        print(f"\n✅ CONSTRUCCIÓN COMPLETA")
-        print(f"   Archivos generados:")
+        # Resumen de archivos generados
+        print(f"\nCONSTRUCCIÓN COMPLETA")
+        print(f"Archivos generados:")
         print(f"   - afn_{nombre_base}.json/png")
-        print(f"   - afd_{sufijo}{nombre_base}.json/png")
-        print(f"   - afd_min_{sufijo}{nombre_base}.json/png")
+        print(f"   - afd_{nombre_base}.json/png (COMPLETO con estados trampa)")
+        print(f"   - afd_min_{nombre_base}.json/png (MINIMAL sin estados trampa)")
+        
+        # Mostrar resumen de reducciones mejorado
+        print(f"\nResumen de reducciones:")
+        print(f"   AFN -> AFD:        {len(afn.estados)} -> {len(afd.estados)} estados (completo)")
+        print(f"   AFD -> Minimal:    {len(afd.estados)} -> {len(afd_min.estados)} estados (sin trampa)")
+        print(f"   Total (AFN -> Min): {len(afn.estados)} -> {len(afd_min.estados)} estados")
         
         return afd_min
         
     except Exception as e:
-        print(f"\n❌ Error durante la construcción: {e}")
+        print(f"\nERROR durante la construcción: {e}")
         import traceback
         traceback.print_exc()
         return None
 
-def menu_simulacion(afd: AFD):
-    """Menú para simulación de cadenas"""
-    while True:
-        print(f"\n┌─────────────────── MENÚ DE SIMULACIÓN ───────────────────┐")
-        print(f"│  1. Simular una cadena específica                       │")
-        print(f"│  2. Simular múltiples cadenas                           │")
-        print(f"│  3. Generar cadenas de prueba automáticamente           │")
-        print(f"│  4. Volver al menú principal                            │")
-        print(f"└─────────────────────────────────────────────────────────┘")
+def generar_cadenas_basicas(alfabeto, max_long=3):
+    """Genera cadenas básicas de prueba"""
+    cadenas = []
+    
+    # Cadena vacía
+    cadenas.append("")
+    
+    # Símbolos individuales
+    simbolos_sin_epsilon = sorted([s for s in alfabeto if s != 'ε'])
+    for simbolo in simbolos_sin_epsilon:
+        cadenas.append(simbolo)
+    
+    # Combinaciones de longitud 2
+    if len(simbolos_sin_epsilon) >= 1:
+        primer_simbolo = simbolos_sin_epsilon[0]
+        cadenas.append(primer_simbolo + primer_simbolo)  # aa
         
-        try:
-            opcion = input("\n> Selecciona una opción: ").strip()
-            
-            if opcion == '1':
-                cadena = input("\n> Ingresa la cadena a simular: ").strip()
-                mostrar_simulacion(afd, cadena)
-                
-            elif opcion == '2':
-                print("\n> Ingresa cadenas separadas por comas:")
-                cadenas_input = input("> ").strip()
-                if cadenas_input:
-                    cadenas = [c.strip() for c in cadenas_input.split(',')]
-                    probar_multiple_cadenas(afd, cadenas)
-                else:
-                    print("❌ No se ingresaron cadenas")
-                    
-            elif opcion == '3':
-                try:
-                    max_long = int(input("\n> Longitud máxima de cadenas (1-6): "))
-                    if 1 <= max_long <= 6:
-                        cadenas_auto = generar_cadenas_prueba(afd.alfabeto, max_long)
-                        print(f"\n📝 Generando {len(cadenas_auto)} cadenas de prueba...")
-                        probar_multiple_cadenas(afd, cadenas_auto[:20])
-                        if len(cadenas_auto) > 20:
-                            print(f"   (Mostrando solo las primeras 20 de {len(cadenas_auto)})")
-                    else:
-                        print("❌ Longitud debe estar entre 1 y 6")
-                except ValueError:
-                    print("❌ Ingresa un número válido")
-                    
-            elif opcion == '4':
+        if len(simbolos_sin_epsilon) >= 2:
+            segundo_simbolo = simbolos_sin_epsilon[1]
+            cadenas.append(primer_simbolo + segundo_simbolo)  # ab
+            cadenas.append(segundo_simbolo + primer_simbolo)  # ba
+            cadenas.append(segundo_simbolo + segundo_simbolo)  # bb
+    
+    # Algunas cadenas más largas
+    if len(simbolos_sin_epsilon) >= 1:
+        s1 = simbolos_sin_epsilon[0]
+        cadenas.append(s1 * 3)  # aaa
+        
+        if len(simbolos_sin_epsilon) >= 2:
+            s2 = simbolos_sin_epsilon[1]
+            cadenas.append(s1 + s2 + s1)  # aba
+            cadenas.append(s2 + s1 + s2)  # bab
+    
+    return cadenas[:10]  # Limitar a 10 cadenas
+
+def simular_cadena_con_transiciones(afd: AFD, cadena: str) -> tuple[bool, str]:
+    """
+    Simula una cadena mostrando todas las transiciones paso a paso
+    Retorna: (es_aceptada, mensaje_resultado)
+    """
+    if not cadena:
+        cadena_display = "ε (cadena vacía)"
+    else:
+        cadena_display = f"'{cadena}'"
+    
+    estado_actual = afd.estado_inicial
+    transiciones = [f"q{estado_actual}"]
+    
+    # Procesar cada símbolo
+    for simbolo in cadena:
+        # Verificar si el símbolo está en el alfabeto
+        if simbolo not in afd.alfabeto:
+            error_msg = f"ERROR: Símbolo '{simbolo}' no encontrado en el alfabeto {sorted(afd.alfabeto)}"
+            return False, error_msg
+        
+        # Buscar transición
+        transicion_encontrada = False
+        for t in afd.transiciones:
+            if t.origen == estado_actual and t.simbolo == simbolo:
+                estado_actual = t.destino
+                transiciones.append(f"--{simbolo}-->")
+                transiciones.append(f"q{estado_actual}")
+                transicion_encontrada = True
                 break
-                
+        
+        if not transicion_encontrada:
+            error_msg = f"ERROR: No hay transición desde q{estado_actual} con símbolo '{simbolo}'"
+            return False, error_msg
+    
+    # Determinar si la cadena es aceptada
+    es_aceptada = estado_actual in afd.estados_aceptacion
+    
+    # Construir mensaje de resultado
+    secuencia_transiciones = " ".join(transiciones)
+    estado_tipo = "ACEPTACIÓN" if es_aceptada else "NO ACEPTACIÓN"
+    resultado_simbolo = "ACEPTA" if es_aceptada else "RECHAZA"
+    
+    mensaje = f"""   Cadena: {cadena_display}
+   Transiciones: {secuencia_transiciones}
+   Estado final: q{estado_actual} ({estado_tipo})
+   Resultado: {resultado_simbolo}"""
+    
+    return es_aceptada, mensaje
+
+def simulacion_interactiva(afd: AFD):
+    """Permite al usuario probar cadenas interactivamente"""
+    print(f"\n{'='*50}")
+    print(f"SIMULACIÓN DE CADENAS - AFD MINIMAL")
+    print(f"{'='*50}")
+    print(f"AFD con {len(afd.estados)} estados")
+    print(f"Alfabeto: {sorted(afd.alfabeto)}")
+    print(f"Estado inicial: q{afd.estado_inicial}")
+    print(f"Estados de aceptación: {[f'q{e}' for e in sorted(afd.estados_aceptacion)]}")
+    
+    # Simulación interactiva
+    print(f"\nSimulación interactiva:")
+    print(f"Ingresa cadenas para probar (Enter vacío para salir)")
+    print(f"Las transiciones se mostrarán automáticamente")
+    print(f"Ejemplo: 'aba', 'ab', '' (cadena vacía)")
+    
+    while True:
+        try:
+            entrada = input(f"\n> ").strip()
+            
+            if entrada == "":
+                # Cadena vacía - usar cadena vacía literal
+                cadena = ""
+            elif entrada.lower() == "salir":
+                print(f"Finalizando simulación...")
+                break
             else:
-                print("❌ Opción no válida")
-                
+                cadena = entrada
+            
+            # Simular la cadena con transiciones
+            print(f"\nSimulando...")
+            es_aceptada, mensaje = simular_cadena_con_transiciones(afd, cadena)
+            print(mensaje)
+            
         except KeyboardInterrupt:
-            print("\n\nVolviendo al menú principal...")
+            print(f"\n\nFinalizando simulación...")
             break
         except Exception as e:
-            print(f"❌ Error: {e}")
-
-def generar_ejemplos():
-    """Genera archivos de ejemplo para diferentes expresiones regulares"""
-    ejemplos = [
-        {
-            'regexp': 'a*',
-            'descripcion': 'Cero o más "a"'
-        },
-        {
-            'regexp': '(a|b)*',
-            'descripcion': 'Cualquier cadena sobre {a,b}'
-        },
-        {
-            'regexp': '(a|b)*a',
-            'descripcion': 'Cadenas que terminan en "a"'
-        },
-        {
-            'regexp': 'a+b*',
-            'descripcion': 'Una o más "a" seguidas de cero o más "b"'
-        },
-        {
-            'regexp': '(ab)*',
-            'descripcion': 'Cero o más repeticiones de "ab"'
-        }
-    ]
-    
-    print(f"\n📁 Generando ejemplos...")
-    
-    for i, ejemplo in enumerate(ejemplos, 1):
-        print(f"\n{i}. {ejemplo['regexp']} - {ejemplo['descripcion']}")
-        
-        try:
-            afd = construir_automata_completo(ejemplo['regexp'])
-            if afd:
-                cadenas_test = generar_cadenas_prueba(afd.alfabeto, 3)[:10]
-                print(f"   Probando cadenas: {cadenas_test}")
-                
-                for cadena in cadenas_test:
-                    es_aceptada, _ = simular_afd_detallado(afd, cadena)
-                    resultado = "✓" if es_aceptada else "✗"
-                    print(f"     '{cadena}' -> {resultado}")
-                    
-        except Exception as e:
-            print(f"   ❌ Error: {e}")
-    
-    print(f"\n✅ Ejemplos generados completamente")
-
-def mostrar_info_automata():
-    """Permite cargar y mostrar información de un autómata guardado"""
-    print(f"\n📄 Archivos JSON disponibles:")
-    
-    # Buscar archivos JSON
-    archivos_json = []
-    for archivo in os.listdir('.'):
-        if archivo.endswith('.json') and (archivo.startswith('afd_') or archivo.startswith('afn_')):
-            archivos_json.append(archivo)
-    
-    if not archivos_json:
-        print("❌ No se encontraron archivos de autómatas")
-        return
-    
-    for i, archivo in enumerate(archivos_json, 1):
-        print(f"  {i}. {archivo}")
-    
-    try:
-        seleccion = int(input(f"\n> Selecciona un archivo (1-{len(archivos_json)}): "))
-        if 1 <= seleccion <= len(archivos_json):
-            archivo_seleccionado = archivos_json[seleccion - 1]
-            
-            # Cargar y mostrar información
-            with open(archivo_seleccionado, 'r', encoding='utf-8') as f:
-                import json
-                data = json.load(f)
-                
-            print(f"\n📊 Información del autómata: {archivo_seleccionado}")
-            print(f"   Estados: {len(data['ESTADOS'])}")
-            print(f"   Alfabeto: {data['SIMBOLOS']}")
-            print(f"   Estado inicial: {data['INICIO']}")
-            print(f"   Estados de aceptación: {data['ACEPTACION']}")
-            print(f"   Transiciones: {len(data['TRANSICIONES'])}")
-            
-            # Mostrar transiciones
-            print(f"\n   Transiciones:")
-            for origen, simbolo, destino in data['TRANSICIONES']:
-                print(f"     q{origen} --{simbolo}--> q{destino}")
-                
-        else:
-            print("❌ Selección inválida")
-            
-    except ValueError:
-        print("❌ Ingresa un número válido")
-    except Exception as e:
-        print(f"❌ Error cargando archivo: {e}")
+            print(f"   ERROR inesperado: {e}")
 
 def main():
-    """Función principal de la aplicación"""
-    afd_actual = None
-    
-    while True:
-        try:
-            limpiar_pantalla()
-            mostrar_banner()
-            
-            if afd_actual:
-                print(f"📊 AFD cargado: {len(afd_actual.estados)} estados, alfabeto {sorted(afd_actual.alfabeto)}")
-            
-            mostrar_menu()
-            opcion = input("\n> Selecciona una opción: ").strip()
-            
-            if opcion == '0':
-                print("\n👋 ¡Hasta luego!")
-                break
-                
-            elif opcion == '1':
-                print("\n📝 CONSTRUCCIÓN DE AUTÓMATA (AFD PARCIAL)")
-                regexp = input("\n> Ingresa la expresión regular: ").strip()
-                
-                if validar_regexp(regexp):
-                    afd_actual = construir_automata_completo(regexp, afd_completo=False)
-                    if afd_actual:
-                        input("\n⏸️  Presiona Enter para continuar...")
-                else:
-                    input("\n⏸️  Presiona Enter para continuar...")
-                    
-            elif opcion == '2':
-                print("\n📝 CONSTRUCCIÓN DE AUTÓMATA (AFD COMPLETO)")
-                print("ℹ️  Se agregará un estado de error para completar todas las transiciones")
-                regexp = input("\n> Ingresa la expresión regular: ").strip()
-                
-                if validar_regexp(regexp):
-                    afd_actual = construir_automata_completo(regexp, afd_completo=True)
-                    if afd_actual:
-                        input("\n⏸️  Presiona Enter para continuar...")
-                else:
-                    input("\n⏸️  Presiona Enter para continuar...")
-                    
-            elif opcion == '3':
-                if afd_actual is None:
-                    print("\n❌ Primero debes construir un autómata (opción 1 o 2)")
-                    input("\n⏸️  Presiona Enter para continuar...")
-                else:
-                    menu_simulacion(afd_actual)
-                    
-            elif opcion == '4':
-                mostrar_info_automata()
-                input("\n⏸️  Presiona Enter para continuar...")
-                
-            elif opcion == '5':
-                generar_ejemplos()
-                input("\n⏸️  Presiona Enter para continuar...")
-                
-            elif opcion == '6':
-                if afd_actual is None:
-                    print("\n❌ Primero debes construir un autómata (opción 1 o 2)")
-                    input("\n⏸️  Presiona Enter para continuar...")
-                else:
-                    interfaz_simulacion_interactiva(afd_actual)
-                    
-            else:
-                print("\n❌ Opción no válida")
-                input("\n⏸️  Presiona Enter para continuar...")
-                
-        except KeyboardInterrupt:
-            print("\n\n👋 ¡Hasta luego!")
-            break
-        except Exception as e:
-            print(f"\n❌ Error inesperado: {e}")
-            import traceback
-            traceback.print_exc()
-            input("\n⏸️  Presiona Enter para continuar...")
-
-def modo_linea_comandos():
-    """Modo de línea de comandos para uso automatizado"""
-    parser = argparse.ArgumentParser(description='Constructor de Autómatas Finitos')
-    parser.add_argument('regexp', help='Expresión regular a procesar')
-    parser.add_argument('--test', nargs='*', help='Cadenas a probar separadas por espacios')
-    parser.add_argument('--no-files', action='store_true', help='No generar archivos')
-    parser.add_argument('--verbose', action='store_true', help='Mostrar información detallada')
-    parser.add_argument('--completo', action='store_true', help='Generar AFD completo')
-    
-    args = parser.parse_args()
-    
-    print(f"Procesando expresión regular: {args.regexp}")
-    
-    if not validar_regexp(args.regexp):
-        sys.exit(1)
-    
+    """Función principal simplificada"""
     try:
-        # Construir autómata
-        afd = construir_automata_completo(args.regexp, afd_completo=args.completo)
+        # Limpiar pantalla y mostrar banner
+        limpiar_pantalla()
+        mostrar_banner()
         
-        if afd is None:
-            print("❌ Error construyendo autómata")
-            sys.exit(1)
+        # Pedir expresión regular
+        print(f"Conversor Regex -> AFN -> AFD -> AFD Minimal")
+        print(f"=" * 70)
         
-        # Probar cadenas si se proporcionaron
-        if args.test:
-            print(f"\n📝 Probando cadenas: {args.test}")
-            probar_multiple_cadenas(afd, args.test)
+        regexp = input("\nIngresa una expresión regular: ").strip()
         
-        print(f"\n✅ Proceso completado exitosamente")
+        if not regexp:
+            print("No ingresaste ninguna expresión regular.")
+            return
         
+        # Validar expresión regular
+        if not validar_regexp(regexp):
+            print("Expresión regular inválida. Programa terminado.")
+            return
+        
+        # Construir autómata completo
+        afd_minimal = construir_automata_completo(regexp)
+        
+        if afd_minimal is None:
+            print("Error construyendo autómata. Programa terminado.")
+            return
+        
+        # Iniciar simulación interactiva
+        print(f"\n" + "="*70)
+        simulacion_interactiva(afd_minimal)
+        
+        print(f"\nPrograma completado exitosamente!")
+        
+    except KeyboardInterrupt:
+        print(f"\n\nPrograma interrumpido por el usuario.")
     except Exception as e:
-        print(f"❌ Error: {e}")
-        sys.exit(1)
+        print(f"\nERROR inesperado: {e}")
+        import traceback
+        traceback.print_exc()
 
 if __name__ == "__main__":
-    if len(sys.argv) > 1:
-        # Modo línea de comandos
-        modo_linea_comandos()
-    else:
-        # Modo interactivo
-        main()
+    main()
