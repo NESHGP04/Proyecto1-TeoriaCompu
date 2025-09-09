@@ -1,5 +1,5 @@
 '''
-Algoritmo de Hopcroft para minimizar un AFD
+Algoritmo de Hopcroft para minimizar un AFD - Versión mejorada con eliminación de estados muertos
 '''
 
 from collections import defaultdict, deque
@@ -45,9 +45,125 @@ class Particion:
     def __iter__(self):
         return iter(self.grupos)
 
+def eliminar_estados_muertos(afd: AFD, mostrar_detalles: bool = True) -> AFD:
+    """
+    Elimina estados muertos (estados no de aceptación que no pueden alcanzar estados de aceptación)
+    
+    Args:
+        afd: El AFD del cual eliminar estados muertos
+        mostrar_detalles: Si mostrar información del proceso
+    
+    Returns:
+        AFD sin estados muertos
+    """
+    if mostrar_detalles:
+        print("🗑️  Eliminando estados muertos...")
+    
+    # Paso 1: Encontrar todos los estados que pueden alcanzar estados de aceptación
+    estados_vivos = set(afd.estados_aceptacion)  # Los estados de aceptación están vivos
+    
+    # BFS inverso: desde estados de aceptación hacia atrás
+    cambios = True
+    while cambios:
+        cambios = False
+        nuevos_vivos = set(estados_vivos)
+        
+        # Para cada transición, si el destino está vivo, el origen también
+        for transicion in afd.transiciones:
+            if transicion.destino in estados_vivos and transicion.origen not in estados_vivos:
+                nuevos_vivos.add(transicion.origen)
+                cambios = True
+        
+        estados_vivos = nuevos_vivos
+    
+    # Paso 2: Identificar estados muertos
+    todos_los_estados = set(afd.estados.keys())
+    estados_muertos = todos_los_estados - estados_vivos
+    
+    if mostrar_detalles:
+        print(f"   Estados vivos: {sorted(estados_vivos)}")
+        print(f"   Estados muertos: {sorted(estados_muertos)}")
+    
+    # Paso 3: Si no hay estados muertos, retornar el AFD original
+    if not estados_muertos:
+        if mostrar_detalles:
+            print("   ✅ No hay estados muertos que eliminar")
+        return afd
+    
+    # Paso 4: Crear nuevo AFD sin estados muertos
+    afd_sin_muertos = AFD()
+    mapeo_estados = {}
+    
+    # Crear estados vivos en el nuevo AFD
+    for estado_viejo in sorted(estados_vivos):
+        es_aceptacion = estado_viejo in afd.estados_aceptacion
+        estado_nuevo = afd_sin_muertos.agregar_estado(es_aceptacion)
+        mapeo_estados[estado_viejo] = estado_nuevo
+        
+        if mostrar_detalles:
+            tipo = " (aceptación)" if es_aceptacion else ""
+            print(f"   q{estado_viejo} -> q{estado_nuevo}{tipo}")
+    
+    # Establecer estado inicial (solo si está vivo)
+    if afd.estado_inicial in estados_vivos:
+        nuevo_inicial = mapeo_estados[afd.estado_inicial]
+        afd_sin_muertos.establecer_inicial(nuevo_inicial)
+    else:
+        # Caso especial: si el estado inicial está muerto, el autómata no acepta nada
+        if mostrar_detalles:
+            print("   ⚠️  Estado inicial está muerto - autómata no acepta nada")
+        # Crear un estado inicial que no acepta nada
+        estado_inicial_nuevo = afd_sin_muertos.agregar_estado(es_aceptacion=False)
+        afd_sin_muertos.establecer_inicial(estado_inicial_nuevo)
+    
+    # Agregar transiciones entre estados vivos
+    transiciones_agregadas = set()
+    for transicion in afd.transiciones:
+        if (transicion.origen in estados_vivos and 
+            transicion.destino in estados_vivos):
+            
+            origen_nuevo = mapeo_estados[transicion.origen]
+            destino_nuevo = mapeo_estados[transicion.destino]
+            
+            # Evitar transiciones duplicadas
+            clave_transicion = (origen_nuevo, transicion.simbolo, destino_nuevo)
+            if clave_transicion not in transiciones_agregadas:
+                afd_sin_muertos.agregar_transicion(origen_nuevo, transicion.simbolo, destino_nuevo)
+                transiciones_agregadas.add(clave_transicion)
+    
+    if mostrar_detalles:
+        print(f"   ✅ Eliminados {len(estados_muertos)} estados muertos")
+        print(f"   AFD resultante: {len(afd_sin_muertos.estados)} estados")
+    
+    return afd_sin_muertos
+
+def es_estado_trampa(afd: AFD, estado: int) -> bool:
+    """
+    Verifica si un estado es un estado trampa:
+    - No es de aceptación
+    - Todas sus transiciones van a sí mismo
+    """
+    if estado in afd.estados_aceptacion:
+        return False
+    
+    # Verificar que todas las transiciones desde este estado van a sí mismo
+    for simbolo in afd.alfabeto:
+        encontrada_transicion = False
+        for transicion in afd.transiciones:
+            if transicion.origen == estado and transicion.simbolo == simbolo:
+                if transicion.destino != estado:
+                    return False  # Una transición no va a sí mismo
+                encontrada_transicion = True
+                break
+        
+        if not encontrada_transicion:
+            return False  # Falta una transición
+    
+    return True
+
 def minimizar_afd_hopcroft(afd: AFD) -> AFD:
     """
-    Minimiza un AFD usando el algoritmo de Hopcroft
+    Minimiza un AFD usando el algoritmo de Hopcroft y elimina estados muertos
     """
     print("Iniciando minimización con algoritmo de Hopcroft...")
     
@@ -120,7 +236,16 @@ def minimizar_afd_hopcroft(afd: AFD) -> AFD:
     print(f"Grupos finales: {len(particion)}")
     
     # Paso 3: Construir AFD minimizado
-    return construir_afd_minimizado(afd, particion)
+    afd_minimizado = construir_afd_minimizado(afd, particion)
+    
+    # Paso 4: Eliminar estados muertos
+    print(f"\n--- Eliminación de estados muertos ---")
+    afd_sin_muertos = eliminar_estados_muertos(afd_minimizado, mostrar_detalles=True)
+    
+    # Paso 5: Renumerar estados para orden lógico
+    afd_final = renumerar_afd_logico(afd_sin_muertos)
+    
+    return afd_final
 
 def obtener_destino(afd: AFD, estado: int, simbolo: str) -> Optional[int]:
     """Obtiene el estado destino para una transición dada"""
@@ -167,6 +292,72 @@ def construir_afd_minimizado(afd_original: AFD, particion: Particion) -> AFD:
     
     return afd_min
 
+def renumerar_afd_logico(afd: AFD) -> AFD:
+    """
+    Renumera los estados del AFD para que sigan un orden lógico:
+    - Estado inicial: 0
+    - Estados siguientes: en orden BFS
+    - Estados de aceptación al final cuando sea posible
+    """
+    print("Renumerando estados para orden lógico...")
+    
+    # BFS desde el estado inicial para encontrar orden lógico
+    mapeo = {}
+    visitados = set()
+    cola = deque([afd.estado_inicial])
+    orden_estados = []
+    
+    # BFS para orden lógico
+    while cola:
+        estado_actual = cola.popleft()
+        if estado_actual not in visitados:
+            visitados.add(estado_actual)
+            orden_estados.append(estado_actual)
+            
+            # Encontrar estados destino ordenados por símbolo
+            destinos = []
+            for t in afd.transiciones:
+                if t.origen == estado_actual and t.destino not in visitados:
+                    destinos.append((t.simbolo, t.destino))
+            
+            # Ordenar por símbolo y agregar a la cola
+            destinos.sort(key=lambda x: x[0])
+            for simbolo, destino in destinos:
+                if destino not in cola:
+                    cola.append(destino)
+    
+    # Agregar estados no visitados (si los hay)
+    for estado in afd.estados.keys():
+        if estado not in visitados:
+            orden_estados.append(estado)
+    
+    # Crear mapeo: estado_antiguo -> estado_nuevo
+    for i, estado_antiguo in enumerate(orden_estados):
+        mapeo[estado_antiguo] = i
+    
+    # Crear nuevo AFD con estados renumerados
+    afd_nuevo = AFD()
+    
+    # Crear estados en orden
+    for i in range(len(orden_estados)):
+        estado_original = orden_estados[i]
+        es_aceptacion = estado_original in afd.estados_aceptacion
+        afd_nuevo.agregar_estado(es_aceptacion)
+    
+    # Copiar transiciones con nueva numeración
+    for t in afd.transiciones:
+        nuevo_origen = mapeo[t.origen]
+        nuevo_destino = mapeo[t.destino]
+        afd_nuevo.agregar_transicion(nuevo_origen, t.simbolo, nuevo_destino)
+    
+    # Establecer estado inicial
+    nuevo_inicial = mapeo[afd.estado_inicial]
+    afd_nuevo.establecer_inicial(nuevo_inicial)
+    
+    print(f"Estados renumerados: {[f'{old}->{new}' for old, new in mapeo.items()]}")
+    
+    return afd_nuevo
+
 def comparar_afd(afd_original: AFD, afd_minimizado: AFD):
     """Compara el AFD original con el minimizado"""
     print(f"\n=== Comparación ===")
@@ -179,16 +370,38 @@ def comparar_afd(afd_original: AFD, afd_minimizado: AFD):
     print(f"  - Transiciones: {len(afd_minimizado.transiciones)}")
     
     reduccion_estados = len(afd_original.estados) - len(afd_minimizado.estados)
-    porcentaje = (reduccion_estados / len(afd_original.estados)) * 100
+    if len(afd_original.estados) > 0:
+        porcentaje = (reduccion_estados / len(afd_original.estados)) * 100
+        print(f"Reducción: {reduccion_estados} estados ({porcentaje:.1f}%)")
+    else:
+        print(f"Reducción: {reduccion_estados} estados")
+
+def verificar_orden_logico(afd: AFD) -> bool:
+    """Verifica si los estados están en orden lógico"""
+    estados_ordenados = sorted(afd.estados.keys())
     
-    print(f"Reducción: {reduccion_estados} estados ({porcentaje:.1f}%)")
+    # Verificar que el estado inicial sea 0
+    if afd.estado_inicial != 0:
+        print(f"Warning: Estado inicial {afd.estado_inicial} no es 0")
+        return False
+    
+    # Verificar numeración consecutiva
+    for i, estado in enumerate(estados_ordenados):
+        if estado != i:
+            print(f"Warning: Estados no son consecutivos desde 0")
+            return False
+    
+    print("Estados en orden lógico correcto")
+    return True
 
 def probar_minimizacion():
-    """Prueba el algoritmo de minimización"""
+    """Prueba el algoritmo de minimización mejorado"""
     casos_prueba = [
         "(a|b)*a",
-        "a*b*",
-        "(a|b)*abb(a|b)*"
+        "a*b*", 
+        "(a|b)*abb(a|b)*",
+        "a+",
+        "(ab)*"
     ]
     
     for caso in casos_prueba:
@@ -196,32 +409,40 @@ def probar_minimizacion():
         print(f"CASO: {caso}")
         print(f"{'='*60}")
         
-        # Crear AFN -> AFD
-        afn = regexp_a_afn(caso)
-        afd = afn_a_afd(afn)
-        afd = optimizar_nombres_estados(afd)
-        
-        print("AFD antes de minimización:")
-        mostrar_tabla_transiciones(afd)
-        
-        # Minimizar
-        afd_min = minimizar_afd_hopcroft(afd)
-        afd_min = optimizar_nombres_estados(afd_min)
-        
-        print(f"\nAFD después de minimización:")
-        mostrar_tabla_transiciones(afd_min)
-        
-        # Comparar
-        comparar_afd(afd, afd_min)
-        
-        # Exportar archivos
-        nombre_archivo = caso.replace('|', '_or_').replace('*', '_star').replace('(', '').replace(')', '')
-        afd_min.exportar_json(f"afd_min_{nombre_archivo}.json")
-        afd_min.visualizar(f"afd_min_{nombre_archivo}")
-        
-        print(f"\nArchivos generados:")
-        print(f"- afd_min_{nombre_archivo}.json")
-        print(f"- afd_min_{nombre_archivo}.png")
+        try:
+            # Crear AFN -> AFD
+            afn = regexp_a_afn(caso)
+            afd = afn_a_afd(afn)
+            afd = optimizar_nombres_estados(afd)
+            
+            print("AFD antes de minimización:")
+            mostrar_tabla_transiciones(afd)
+            
+            # Minimizar
+            afd_min = minimizar_afd_hopcroft(afd)
+            
+            print(f"\nAFD después de minimización:")
+            mostrar_tabla_transiciones(afd_min)
+            
+            # Verificar orden
+            verificar_orden_logico(afd_min)
+            
+            # Comparar
+            comparar_afd(afd, afd_min)
+            
+            # Exportar archivos
+            nombre_archivo = caso.replace('|', '_or_').replace('*', '_star').replace('+', '_plus').replace('(', '').replace(')', '')
+            afd_min.exportar_json(f"afd_min_{nombre_archivo}.json")
+            afd_min.visualizar(f"afd_min_{nombre_archivo}")
+            
+            print(f"\nArchivos generados:")
+            print(f"- afd_min_{nombre_archivo}.json")
+            print(f"- afd_min_{nombre_archivo}.png")
+            
+        except Exception as e:
+            print(f"Error procesando caso {caso}: {e}")
+            import traceback
+            traceback.print_exc()
 
 if __name__ == "__main__":
     probar_minimizacion()
