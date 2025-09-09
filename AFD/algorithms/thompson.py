@@ -1,5 +1,5 @@
 '''
-Algoritmo de Thompson para construir un AFN a partir de una expresión regular
+Algoritmo de Thompson corregido para construir un AFN a partir de una expresión regular
 '''
 from models.automata import AFN, EPSILON
 from .shunting_yard import shunting_yard
@@ -79,14 +79,21 @@ def crear_fragmento_basico(simbolo: str) -> FragmentoAFN:
 
 def concatenar_fragmentos(frag1: FragmentoAFN, frag2: FragmentoAFN) -> FragmentoAFN:
     """Concatena dos fragmentos AFN"""
-    # Combinar los AFN
-    afn_resultado = combinar_afn(frag1.afn, frag2.afn)
+    # Crear un nuevo AFN que combine ambos fragmentos
+    afn_resultado = AFN()
+    
+    # Copiar frag1
+    offset1 = 0
+    copiar_fragmento(afn_resultado, frag1.afn, offset1)
+    
+    # Copiar frag2 con offset
+    offset2 = len(frag1.afn.estados)
+    copiar_fragmento(afn_resultado, frag2.afn, offset2)
     
     # Conectar el estado final de frag1 con el inicial de frag2 usando epsilon
-    offset = len(frag1.afn.estados)
-    afn_resultado.agregar_transicion(frag1.final, EPSILON, frag2.inicial + offset)
+    afn_resultado.agregar_transicion(frag1.final, EPSILON, frag2.inicial + offset2)
     
-    return FragmentoAFN(afn_resultado, frag1.inicial, frag2.final + offset)
+    return FragmentoAFN(afn_resultado, frag1.inicial, frag2.final + offset2)
 
 def unir_fragmentos(frag1: FragmentoAFN, frag2: FragmentoAFN) -> FragmentoAFN:
     """Une dos fragmentos AFN con el operador |"""
@@ -95,14 +102,12 @@ def unir_fragmentos(frag1: FragmentoAFN, frag2: FragmentoAFN) -> FragmentoAFN:
     # Nuevo estado inicial
     nuevo_inicial = afn_resultado.agregar_estado()
     
-    # Combinar fragmentos con offset
-    offset1 = 1  # Offset para frag1
-    offset2 = offset1 + len(frag1.afn.estados)  # Offset para frag2
-    
-    # Copiar estados y transiciones de frag1
+    # Copiar frag1 con offset
+    offset1 = 1
     copiar_fragmento(afn_resultado, frag1.afn, offset1)
     
-    # Copiar estados y transiciones de frag2
+    # Copiar frag2 con offset
+    offset2 = offset1 + len(frag1.afn.estados)
     copiar_fragmento(afn_resultado, frag2.afn, offset2)
     
     # Nuevo estado final
@@ -119,28 +124,30 @@ def unir_fragmentos(frag1: FragmentoAFN, frag2: FragmentoAFN) -> FragmentoAFN:
     return FragmentoAFN(afn_resultado, nuevo_inicial, nuevo_final)
 
 def clausura_kleene(frag: FragmentoAFN) -> FragmentoAFN:
-    """Aplica clausura de Kleene (a*)"""
+    """Aplica clausura de Kleene (a*) - VERSIÓN CORREGIDA"""
     afn_resultado = AFN()
     
-    # Nuevo estado inicial/final
+    # Crear nuevo estado inicial
     nuevo_inicial = afn_resultado.agregar_estado()
-    nuevo_final = afn_resultado.agregar_estado()
     
-    # Copiar el fragmento original
+    # Copiar el fragmento original con offset de 1
     offset = 1
     copiar_fragmento(afn_resultado, frag.afn, offset)
     
-    # Conexiones para a*:
-    # 1. Inicial -> Final (cadena vacía)
+    # Crear nuevo estado final
+    nuevo_final = afn_resultado.agregar_estado()
+    
+    # Conexiones para a* según Thompson:
+    # 1. Inicial -> Final (para cadena vacía ε)
     afn_resultado.agregar_transicion(nuevo_inicial, EPSILON, nuevo_final)
     
-    # 2. Inicial -> Inicial del fragmento
+    # 2. Inicial -> Inicial del fragmento original
     afn_resultado.agregar_transicion(nuevo_inicial, EPSILON, frag.inicial + offset)
     
     # 3. Final del fragmento -> Final nuevo
     afn_resultado.agregar_transicion(frag.final + offset, EPSILON, nuevo_final)
     
-    # 4. Final del fragmento -> Inicial del fragmento (bucle)
+    # 4. Final del fragmento -> Inicial del fragmento (para repetición)
     afn_resultado.agregar_transicion(frag.final + offset, EPSILON, frag.inicial + offset)
     
     return FragmentoAFN(afn_resultado, nuevo_inicial, nuevo_final)
@@ -149,21 +156,21 @@ def clausura_positiva(frag: FragmentoAFN) -> FragmentoAFN:
     """Aplica clausura positiva (a+ = aa*)"""
     afn_resultado = AFN()
     
-    # Nuevo estado final
-    nuevo_final = afn_resultado.agregar_estado()
-    
     # Copiar el fragmento original
-    offset = 1
+    offset = 0
     copiar_fragmento(afn_resultado, frag.afn, offset)
+    
+    # Crear nuevo estado final
+    nuevo_final = afn_resultado.agregar_estado()
     
     # Conexiones para a+:
     # 1. Final del fragmento -> Final nuevo
-    afn_resultado.agregar_transicion(frag.final + offset, EPSILON, nuevo_final)
+    afn_resultado.agregar_transicion(frag.final, EPSILON, nuevo_final)
     
-    # 2. Final del fragmento -> Inicial del fragmento (bucle)
-    afn_resultado.agregar_transicion(frag.final + offset, EPSILON, frag.inicial + offset)
+    # 2. Final del fragmento -> Inicial del fragmento (bucle para repetición)
+    afn_resultado.agregar_transicion(frag.final, EPSILON, frag.inicial)
     
-    return FragmentoAFN(afn_resultado, frag.inicial + offset, nuevo_final)
+    return FragmentoAFN(afn_resultado, frag.inicial, nuevo_final)
 
 def copiar_fragmento(afn_destino: AFN, afn_origen: AFN, offset: int):
     """Copia estados y transiciones de un AFN a otro con offset"""
@@ -174,19 +181,6 @@ def copiar_fragmento(afn_destino: AFN, afn_origen: AFN, offset: int):
     # Copiar transiciones con offset
     for t in afn_origen.transiciones:
         afn_destino.agregar_transicion(t.origen + offset, t.simbolo, t.destino + offset)
-
-def combinar_afn(afn1: AFN, afn2: AFN) -> AFN:
-    """Combina dos AFN en uno solo"""
-    afn_resultado = AFN()
-    
-    # Copiar primer AFN
-    copiar_fragmento(afn_resultado, afn1, 0)
-    
-    # Copiar segundo AFN con offset
-    offset = len(afn1.estados)
-    copiar_fragmento(afn_resultado, afn2, offset)
-    
-    return afn_resultado
 
 def regexp_a_afn(regexp: str) -> AFN:
     """Función principal: convierte regexp a AFN"""
@@ -201,12 +195,11 @@ def regexp_a_afn(regexp: str) -> AFN:
     
     return afn
 
-# Función de prueba
 def probar_thompson():
     """Prueba el algoritmo de Thompson"""
     casos_prueba = [
         "a",
-        "a|b",
+        "a|b", 
         "a*",
         "(a|b)*",
         "ab"
@@ -227,5 +220,4 @@ def probar_thompson():
         print(f"Estados de aceptación: {afn.estados_aceptacion}")
 
 if __name__ == "__main__":
-    # Primero necesitamos importar las funciones anteriores
     probar_thompson()
