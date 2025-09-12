@@ -23,23 +23,22 @@ def limpiar_pantalla():
 def mostrar_banner():
     """Muestra el banner de la aplicación"""
     print("""
-╔══════════════════════════════════════════════════════════════════════════════╗
+╔═══════════════════════════════════════════════════════════════════════════════╗
 ║                    CONSTRUCTOR DE AUTÓMATAS FINITOS                          ║
 ║                         Teoría de la Computación                             ║
 ║                              Proyecto 1 - 2025                               ║
-╚══════════════════════════════════════════════════════════════════════════════╝
+╚═══════════════════════════════════════════════════════════════════════════════╝
     """)
 
 def validar_regexp(regexp: str) -> bool:
     """Valida si una expresión regular tiene la sintaxis correcta"""
     try:
         # Caracteres permitidos
-        simbolos_permitidos = set('abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789ε')
-        operadores_permitidos = set('|*+()')
+        permitidos = set('abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789|*+()εÎµ')
         
         # Verificar caracteres válidos
         for char in regexp:
-            if char not in simbolos_permitidos and char not in operadores_permitidos:
+            if char not in permitidos:
                 print(f"ERROR: Carácter no permitido '{char}'")
                 return False
         
@@ -97,8 +96,18 @@ def construir_automata_completo(regexp: str) -> Optional[AFD]:
         print(f"   Estado inicial: {afn.estado_inicial}")
         print(f"   Estados de aceptación: {sorted(afn.estados_aceptacion)}")
         
+        
+        nombre_base = (regexp.replace('|', '_or_')
+                            .replace('*', '_star')
+                            .replace('+', '_plus')
+                            .replace('(', '')
+                            .replace(')', '')
+                            .replace('ε', '_epsilon')  
+                            .replace('Îµ', '_epsilon')  
+                            .replace(' ', '_')          
+                            .replace('.', '_dot'))      
+        
         # Exportar AFN
-        nombre_base = regexp.replace('|', '_or_').replace('*', '_star').replace('+', '_plus').replace('(', '').replace(')', '')
         afn.exportar_json(f"afn_{nombre_base}.json")
         afn.visualizar(f"afn_{nombre_base}")
         print(f"   Archivo AFN: afn_{nombre_base}.json")
