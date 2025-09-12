@@ -79,21 +79,28 @@ def probar_shunting_yard():
     """Pruebas del algoritmo Shunting Yard"""
     casos_prueba = [
         "a",
+        "ε",          # Epsilon solo
         "ab",
+        "ε+a",        # Epsilon+ concatenado con a
         "a|b", 
         "a*",
+        "ε*",         # Epsilon*
         "a+",
         "(a|b)*",
-        "(a|b)*abb(a|b)*",
-        "a(b|c)*d"
+        "ε+a*b",      # Caso problemático original
+        "(ε|a)*",     # Epsilon en unión
+        "ε*(a|b)",    # Epsilon* concatenado
     ]
     
     print("=== Pruebas Shunting Yard ===")
     for caso in casos_prueba:
-        postfix = shunting_yard(caso)
-        print(f"Infija:  {caso}")
-        print(f"Postfix: {postfix}")
-        print()
+        print(f"\nProcesando: '{caso}'")
+        try:
+            postfix = shunting_yard(caso)
+            print(f"✓ Infija:   {caso}")
+            print(f"✓ Postfix:  {postfix}")
+        except Exception as e:
+            print(f"✗ ERROR:    {e}")
 
 if __name__ == "__main__":
     probar_shunting_yard()

@@ -34,11 +34,12 @@ def validar_regexp(regexp: str) -> bool:
     """Valida si una expresión regular tiene la sintaxis correcta"""
     try:
         # Caracteres permitidos
-        permitidos = set('abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789|*+()ε')
+        simbolos_permitidos = set('abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789ε')
+        operadores_permitidos = set('|*+()')
         
         # Verificar caracteres válidos
         for char in regexp:
-            if char not in permitidos:
+            if char not in simbolos_permitidos and char not in operadores_permitidos:
                 print(f"ERROR: Carácter no permitido '{char}'")
                 return False
         
